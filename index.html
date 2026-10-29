@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Nothing on this page may talk to the internet -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'none'; form-action 'none'">
+  <meta name="theme-color" content="#5e1014">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon192.png">
+  <title>Money Envelopes</title>
+  <link rel="icon" href="icons/icon32.png">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <h1>Money Envelopes</h1>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="envelopes" aria-selected="true">Envelopes</button>
+        <button type="button" role="tab" data-tab="budget" aria-selected="false">Budget</button>
+        <button type="button" role="tab" data-tab="trends" aria-selected="false">Trends</button>
+        <button type="button" role="tab" data-tab="transactions" aria-selected="false">Transactions</button>
+        <button type="button" role="tab" data-tab="import" aria-selected="false">Add statements</button>
+        <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Envelopes -->
+    <section data-panel="envelopes">
+      <div class="row-between">
+        <div>
+          <h2>Your envelopes</h2>
+          <p class="muted">Each envelope is one budget line. It fills up as you spend, and a red tab means it ran over.</p>
+        </div>
+        <label class="field">Month
+          <select id="month-pick"></select>
+        </label>
+      </div>
+      <div class="env-layout">
+        <aside class="env-left">
+          <div class="tiles stack">
+            <div class="tile"><span class="tile-label">Income this month</span><span class="tile-value" id="t-income">—</span></div>
+            <div class="tile"><span class="tile-label">Planned spending</span><span class="tile-value" id="t-plan">—</span></div>
+            <div class="tile"><span class="tile-label">Spent so far</span><span class="tile-value" id="t-spent">—</span></div>
+            <div class="tile"><span class="tile-label">Envelopes over</span><span class="tile-value" id="t-over">—</span></div>
+          </div>
+        </aside>
+        <div class="env-center">
+          <div class="card welcome" id="welcome" hidden>
+            <h3>Bring your numbers over</h3>
+            <p>On your computer, open Money Envelopes, go to <b>Add statements</b> and press <b>Save backup file</b>. Get that file onto this phone (email it to yourself, or save it to Google Drive).</p>
+            <p>Then come back here, open <b>Add statements</b>, and tap <b>Restore from backup</b>.</p>
+          </div>
+          <div class="banner" id="alert-banner" hidden></div>
+          <div class="envs" id="envs"></div>
+          <p class="muted small" id="needs-home-note" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Budget -->
+    <section data-panel="budget" hidden>
+      <h2>Your budget</h2>
+      <p class="muted">YNAB rule 1: give every dollar a job. Change any amount and the envelopes update straight away. "Alert me at" sets when your phone warns you about that envelope.</p>
+      <div class="tiles">
+        <div class="tile"><span class="tile-label">Monthly income to count on</span>
+          <input class="money-input big" id="income-input" type="number" min="0" step="0.01" aria-label="Monthly income"></div>
+        <div class="tile"><span class="tile-label">Given a job</span><span class="tile-value" id="b-total">—</span></div>
+        <div class="tile"><span class="tile-label">Ready to assign</span><span class="tile-value" id="b-left">—</span><span class="small muted" id="b-left-note"></span></div>
+      </div>
+      <div class="card">
+        <table class="tbl" id="budget-table">
+          <thead><tr><th>Line</th><th>Type</th><th class="num">Plan per month</th><th class="num">Alert me at</th><th>Note</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="add-line">
+          <input id="new-line-name" type="text" placeholder="New line name" aria-label="New line name">
+          <select id="new-line-group" aria-label="New line type">
+            <option>Bills</option><option>Debt</option><option>Needs</option><option>Wants</option><option>Saving</option><option>Your call</option>
+          </select>
+          <button type="button" class="btn" id="add-line">Add line</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trends -->
+    <section data-panel="trends" hidden>
+      <h2>Trends</h2>
+      <p class="muted">Spending each month against your income line. Card payments count in their debt envelope; transfers between your own accounts are left out.</p>
+      <div class="card"><div id="trend-chart" class="chart"></div></div>
+      <div class="card">
+        <h3>Each envelope, month by month</h3>
+        <p class="muted small">The last column compares the latest month with the one before it. Red means spending grew.</p>
+        <div class="tbl-box"><table class="tbl" id="trend-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Transactions -->
+    <section data-panel="transactions" hidden>
+      <div class="row-between">
+        <div>
+          <h2>Transactions</h2>
+          <p class="muted">Every transaction and the envelope it landed in. Change the envelope if one is in the wrong place.</p>
+        </div>
+        <div class="filters">
+          <label class="field">Show
+            <select id="tx-filter">
+              <option value="home">Needs a home</option>
+              <option value="month">Chosen month</option>
+              <option value="all">Everything</option>
+            </select>
+          </label>
+          <label class="field">Search <input id="tx-search" type="search" placeholder="e.g. Uber"></label>
+        </div>
+      </div>
+      <div class="card"><div class="tbl-box tall"><table class="tbl" id="tx-table">
+        <thead><tr><th>Date</th><th>Account</th><th>Description</th><th class="num">Amount</th><th>Envelope</th></tr></thead>
+        <tbody></tbody></table></div>
+        <p class="muted small" id="tx-count"></p>
+      </div>
+    </section>
+
+    <!-- Import -->
+    <section data-panel="import" hidden>
+      <h2>Add statements</h2>
+      <p class="muted">Download your transactions as CSV files from RBC or Capital One online banking, then choose them here. Your phone warns you if an envelope passes its alert level. Anything already added is skipped, so it's safe to drop the same file twice.</p>
+      <label class="drop" id="drop">
+        <input type="file" id="file-input" accept=".csv,text/csv" multiple>
+        <span class="drop-big">Tap to add CSV files</span>
+        <span class="muted">They're read on this phone and never sent anywhere</span>
+      </label>
+      <div id="import-result" class="card" hidden></div>
+      <div class="card">
+        <h3>Backup</h3>
+        <p class="muted small">Your data lives only on this phone. If the phone is lost or the app is removed, it's gone, so save a backup now and then and keep it somewhere safe.</p>
+        <div class="btn-row">
+          <button type="button" class="btn" id="backup-save">Save backup file</button>
+          <label class="btn">Restore from backup<input type="file" id="backup-load" accept=".json,application/json" hidden></label>
+        </div>
+        <p class="muted small" id="backup-msg"></p>
+      </div>
+    </section>
+      <!-- Settings -->
+    <section data-panel="settings" hidden>
+      <h2>Settings</h2>
+      <div class="settings-grid">
+        <div class="card">
+          <h3>Envelope colour</h3>
+          <p class="muted small">Tap a knob to pick a colour, or colour each envelope by how full it is (green, then amber, then red when it runs over). </p>
+        <div class="env-tools">
+          <div class="swatches" id="swatches"></div>
+          <button type="button" class="chip" id="by-fill" aria-pressed="false">Colour by how full</button>
+        </div>
+          <div class="envs settings-preview" id="colour-preview" aria-hidden="true"></div>
+        </div>
+        <div class="card" id="wallpaper-card" hidden>
+          <h3>Desktop wallpaper</h3>
+          <p class="muted small">Turn these envelopes into your Windows wallpaper. Anyone who can see your screen will see it, so you can hide the dollar amounts.</p>
+          <div class="btn-row">
+            <button type="button" class="btn primary" id="wp-set">Set as my wallpaper</button>
+            <button type="button" class="btn" id="wp-restore">Put my old wallpaper back</button>
+          </div>
+          <p class="small muted">Once it's on, it repaints itself every 6 hours (4 times a day), even when the app is closed. "Put my old wallpaper back" switches that off.</p>
+          <label class="check"><input type="checkbox" id="wp-auto"> Also update it right away when I add statements or change the budget</label>
+          <label class="check"><input type="checkbox" id="wp-hide"> Hide dollar amounts (show only how full each envelope is)</label>
+          <p class="small" id="wp-msg"></p>
+        </div>
+      </div>
+    </section>
+
+</main>
+
+  <div class="tip" id="tip" hidden></div>
+  <script src="seed.js"></script>
+  <script src="rules.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
