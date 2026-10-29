@@ -194,6 +194,37 @@ h3 { font-family: var(--plate); font-size: 1.1rem; letter-spacing: 0.08em; text-
 @media (max-width: 720px) { .env-layout { grid-template-columns: 1fr; } .env-left { position: static; } .tiles.stack { grid-template-columns: 1fr 1fr; } }
 [hidden] { display: none !important; }
 
+/* Adding by hand */
+.fab {
+  position: fixed; right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 30;
+  width: 62px; height: 62px; border-radius: 50%; cursor: pointer; font-size: 2rem; line-height: 1; font-weight: 700; color: #1a1006;
+  border: 4px solid #0b0807; outline: 2px solid var(--gold-lo);
+  background: radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 55%, #8f6f2c);
+  box-shadow: 0 6px 14px rgba(0,0,0,.6), inset 0 2px 3px rgba(255,255,255,.4);
+}
+.fab:active { transform: scale(.94); }
+.sheet-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(10,6,5,.78); display: grid; place-items: center; padding: 16px; }
+.sheet { width: min(520px, 100%); max-height: 92vh; overflow: auto; display: grid; gap: 12px; padding: 18px;
+  border: 3px solid var(--gold); border-radius: 12px; background-color: var(--grille);
+  background-image: repeating-linear-gradient(0deg, var(--grille-thread) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, var(--grille-thread) 0 1px, transparent 1px 4px);
+  box-shadow: inset 0 0 0 2px #000, 0 20px 60px rgba(0,0,0,.7); }
+.sheet .field input, .sheet .field select, .env-picker select, .env-new input, .env-new select, .payee select, .payee input, .payee-add input, .payee-add select {
+  width: 100%; font-size: 1rem; padding: 10px; border: 1px solid var(--gold-lo); border-radius: 6px; background: #120d0b; color: var(--cream); text-transform: none; letter-spacing: 0;
+}
+.sheet .field { text-transform: none; letter-spacing: 0; font-size: 0.9rem; }
+.sheet .btn.primary { justify-content: center; padding: 14px; font-size: 1rem; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.env-picker, .env-new { display: grid; gap: 8px; }
+.env-new { grid-template-columns: 1fr auto; }
+.payee-list { display: grid; gap: 10px; }
+.payee { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: rgba(0,0,0,.3); }
+.payee-top { display: flex; align-items: center; gap: 10px; }
+.payee-top b { flex: 1; color: var(--cream); }
+.payee-add { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.hand-tag { display: inline-block; font-size: 0.75rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--gold-lo); color: var(--gold); white-space: nowrap; }
+#new-env-btn { justify-self: start; }
+.wrap { padding-bottom: 96px; }
+
 /* ---------- Phone ---------- */
 html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
 @media (max-width: 600px) {
@@ -204,7 +235,7 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { flex: 0 0 auto; padding: 12px 14px; font-size: 0.8rem; scroll-snap-align: start; }
-  .wrap { margin: 0 0 0; padding: 16px 12px calc(32px + env(safe-area-inset-bottom)); border-left-width: 0; border-right-width: 0; border-radius: 0; }
+  .wrap { margin: 0 0 0; padding: 16px 12px calc(96px + env(safe-area-inset-bottom)); border-left-width: 0; border-right-width: 0; border-radius: 0; }
   h2 { font-size: 1.15rem; }
   .tile { padding: 10px 12px; }
   .tile-value { font-size: 1.4rem; }
@@ -251,6 +282,7 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   #tx-table select { width: 100%; padding: 8px; }
 
   .boom-overlay { padding: 10px 8px; align-items: end; }
+  .sheet-overlay { padding: 8px; align-items: end; }
   .boom-panel { max-height: 88vh; padding: 14px 12px; }
   .boom-item { grid-template-columns: 3.5rem minmax(0, 1fr) auto; }
   .boom-desc { grid-column: 2; grid-row: 1; }

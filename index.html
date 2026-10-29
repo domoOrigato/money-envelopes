@@ -56,6 +56,7 @@
           </div>
           <div class="banner" id="alert-banner" hidden></div>
           <div class="envs" id="envs"></div>
+          <button type="button" class="btn" id="new-env-btn">+ New envelope</button>
           <p class="muted small" id="needs-home-note" hidden></p>
         </div>
       </div>
@@ -148,6 +149,21 @@
       <h2>Settings</h2>
       <div class="settings-grid">
         <div class="card">
+          <h3>Payees &amp; payors</h3>
+          <p class="muted small">Who you pay, and who pays you. Give each one a usual envelope and it fills in for you when you add a transaction. "Shows on statement as" is optional: if your bank statement uses a different name, put a piece of it here so statements sort themselves too.</p>
+          <div class="payee-list" id="payee-list"></div>
+          <div class="payee-add">
+            <input id="payee-name" type="text" placeholder="Name, e.g. Long &amp; McQuade" aria-label="Payee or payor name">
+            <select id="payee-kind" aria-label="Pay or paid by">
+              <option value="out">I pay them</option>
+              <option value="in">They pay me</option>
+            </select>
+            <span id="payee-env-slot"></span>
+            <input id="payee-match" type="text" placeholder="Shows on statement as (optional)" aria-label="Shows on statement as">
+            <button type="button" class="btn" id="payee-add">Add</button>
+          </div>
+        </div>
+        <div class="card">
           <h3>Envelope colour</h3>
           <p class="muted small">Tap a knob to pick a colour, or colour each envelope by how full it is (green, then amber, then red when it runs over). </p>
         <div class="env-tools">
@@ -174,6 +190,7 @@
 </main>
 
   <div class="tip" id="tip" hidden></div>
+  <button type="button" class="fab" id="fab" aria-label="Add a transaction" title="Add a transaction">+</button>
   <script src="seed.js"></script>
   <script src="rules.js"></script>
   <script src="app.js"></script>

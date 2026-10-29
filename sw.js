@@ -1,6 +1,6 @@
 // Keeps a copy of the app on the phone so it opens with no internet.
 // Bump VERSION whenever any file changes, so phones pick up the new copy.
-const VERSION = 'me-1';
+const VERSION = 'me-2';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'rules.js', 'seed.js', 'manifest.json',
   'icons/icon32.png', 'icons/icon192.png', 'icons/icon512.png', 'icons/maskable512.png'];
 

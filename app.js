@@ -54,8 +54,14 @@
   const txKey = (t) => `${t.a}|${t.d}|${t.s}|${t.v.toFixed(2)}`;
 
   function sortTx(t) {
+    // A payee you gave a statement name wins, then what the app learned, then a payee whose name shows up
+    const up = t.s.toUpperCase();
+    const exact = payees().find((p) => p.match && p.env && up.includes(p.match.toUpperCase()));
+    if (exact) return exact.env;
     const learned = state.learned[merchantKey(t.s)];
     if (learned !== undefined) return learned;
+    const named = payees().find((p) => p.env && p.name.length >= 4 && up.includes(p.name.toUpperCase()));
+    if (named) return named.env;
     const env = categorize(t);
     return env === null ? HOME : env;
   }
@@ -320,7 +326,16 @@
         t.manual = true;
         save(); render();
       });
-      return el('tr', {}, el('td', { text: t.d }), el('td', { text: t.a }), el('td', { text: t.s }),
+      const desc = el('td', { text: t.s });
+      if (t.byHand) {
+        const del = el('button', { type: 'button', class: 'icon-btn', title: 'Delete this one', 'aria-label': `Delete ${t.s}`, text: '✕' });
+        del.addEventListener('click', () => {
+          if (!window.confirm(`Delete "${t.s}" ${money2(t.v)} from ${t.d}?`)) return;
+          state.tx = state.tx.filter((o) => o !== t); save(); render();
+        });
+        desc.append(' ', el('span', { class: 'hand-tag', text: 'added by hand' }), del);
+      }
+      return el('tr', {}, el('td', { text: t.d }), el('td', { text: t.a }), desc,
         el('td', { class: 'num ' + (t.v > 0 ? 'good' : ''), text: money2(t.v) }), el('td', {}, sel));
     }));
     $('#tx-count').textContent = rows.length
@@ -384,6 +399,7 @@
     const have = {};
     state.tx.forEach((t) => { const k = txKey(t); have[k] = (have[k] || 0) + 1; });
     let addedTotal = 0, homeless = 0;
+    const newOnes = [];
     for (const f of files) {
       let txs = null;
       try { txs = toTransactions(parseCsv(await f.text())); } catch (e) { txs = null; }
@@ -402,7 +418,9 @@
       Object.entries(seen).forEach(([k, n]) => { have[k] = Math.max(have[k] || 0, n); });
       addedTotal += added;
       box.append(el('p', { text: `${f.name}: ${added} new, ${txs.length - added} already here.` }));
+      if (added) newOnes.push(...state.tx.slice(-added));
     }
+    showPossibleDoubles(box, newOnes);
     if (homeless) {
       const go = el('button', { type: 'button', class: 'btn primary', text: `Sort ${homeless} that need a home` });
       go.addEventListener('click', () => { $('#tx-filter').value = 'home'; showTab('transactions'); });
@@ -460,6 +478,175 @@
       state.learned[k] = best; n++;
     }
     return n;
+  }
+
+  // ---------- adding by hand: payees, payors and new envelopes ----------
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const payees = () => (state.payees = state.payees || []);
+  const accounts = () => [...new Set(['Cash', ...state.tx.map((t) => t.a)])];
+  function payeeFor(text) {
+    const up = String(text).toUpperCase();
+    return payees().find((p) => p.name.toUpperCase() === up.trim())
+      || payees().find((p) => p.match && up.includes(p.match.toUpperCase()));
+  }
+  function addEnvelope(name, group, plan) {
+    name = name.trim();
+    if (!name || name === INCOME || name === IGNORE) return null;
+    if (!lines().includes(name)) state.plan.push({ line: name, group, plan: Number(plan || 0), note: '', alert: defaultAlert(group) });
+    return name;
+  }
+
+  // A pop-up card that slides up from the bottom of the screen
+  function sheet(title, build) {
+    const overlay = el('div', { class: 'sheet-overlay' });
+    const panel = el('div', { class: 'sheet', role: 'dialog', 'aria-label': title });
+    const close = el('button', { type: 'button', class: 'boom-close', 'aria-label': 'Close', text: '✕' });
+    const done = () => { overlay.remove(); };
+    close.addEventListener('click', done);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(); });
+    panel.append(el('div', { class: 'boom-head' }, el('h2', { text: title }), close));
+    build(panel, done);
+    overlay.append(panel);
+    document.body.append(overlay);
+    const first = panel.querySelector('input, select');
+    if (first) setTimeout(() => first.focus(), 50);
+  }
+  const field = (label, input) => el('label', { class: 'field' }, label, input);
+  // Envelope picker with "+ New envelope..." at the bottom, which opens two small boxes to name it
+  function envPicker(current, allowIncome) {
+    const wrap = el('div', { class: 'env-picker' });
+    const sel = envOptions(current);
+    if (!allowIncome) [...sel.options].forEach((o) => { if (o.value === INCOME) o.remove(); });
+    sel.append(new Option('+ New envelope...', '__new'));
+    const name = el('input', { type: 'text', placeholder: 'New envelope name, e.g. Music supplies', 'aria-label': 'New envelope name' });
+    const group = el('select', { 'aria-label': 'New envelope type' });
+    ['Needs', 'Wants', 'Bills', 'Debt', 'Saving', 'Your call'].forEach((g) => group.append(new Option(g, g)));
+    const extra = el('div', { class: 'env-new', hidden: '' }, name, group);
+    sel.addEventListener('change', () => { extra.hidden = sel.value !== '__new'; if (!extra.hidden) name.focus(); });
+    wrap.append(sel, extra);
+    wrap.value = () => (sel.value === '__new' ? addEnvelope(name.value, group.value, 0) : sel.value);
+    wrap.set = (v) => { sel.value = v; extra.hidden = true; };
+    return wrap;
+  }
+
+  function addTransactionSheet() {
+    sheet('Add a transaction', (panel, done) => {
+      let dir = 'out';
+      const outBtn = el('button', { type: 'button', class: 'chip', 'aria-pressed': 'true', text: 'Money out' });
+      const inBtn = el('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', text: 'Money in' });
+      const who = el('input', { type: 'text', list: 'payee-names', autocomplete: 'off', placeholder: 'e.g. Metcap' });
+      const names = el('datalist', { id: 'payee-names' });
+      const amount = el('input', { type: 'number', inputmode: 'decimal', min: '0', step: '0.01', placeholder: '0.00' });
+      const date = el('input', { type: 'date' }); date.value = today();
+      const acct = el('select', {}); accounts().forEach((a) => acct.append(new Option(a, a)));
+      const env = envPicker(HOME, true);
+      const remember = el('input', { type: 'checkbox' }); remember.checked = true;
+      const whoLabel = el('span', { text: 'Paid to (payee)' });
+      const msg = el('p', { class: 'small bad' });
+      const fillNames = () => names.replaceChildren(...payees().filter((p) => p.kind === dir).map((p) => new Option(p.name)));
+      const setDir = (d) => {
+        dir = d; outBtn.setAttribute('aria-pressed', String(d === 'out')); inBtn.setAttribute('aria-pressed', String(d === 'in'));
+        whoLabel.textContent = d === 'out' ? 'Paid to (payee)' : 'Paid by (payor)';
+        if (d === 'in') env.set(INCOME); else if (env.value() === INCOME) env.set(HOME);
+        fillNames();
+      };
+      // Pick a saved name and its usual envelope fills itself in
+      who.addEventListener('change', () => { const p = payeeFor(who.value); if (p && p.env) env.set(p.env); });
+      outBtn.addEventListener('click', () => setDir('out'));
+      inBtn.addEventListener('click', () => setDir('in'));
+      const save1 = el('button', { type: 'button', class: 'btn primary', text: 'Save' });
+      save1.addEventListener('click', () => {
+        const name = who.value.trim(), v = Math.round(Number(amount.value) * 100) / 100;
+        if (!name) { msg.textContent = 'Who was it? Type a name.'; return; }
+        if (!(v > 0)) { msg.textContent = 'Type an amount above zero.'; return; }
+        const e = env.value();
+        if (e === null) { msg.textContent = 'Give the new envelope a name.'; return; }
+        state.tx.push({ id: state.nextId++, d: date.value || today(), a: acct.value, s: name, v: dir === 'out' ? -v : v, env: e || HOME, manual: true, byHand: true });
+        if (remember.checked && !payees().some((p) => p.name.toUpperCase() === name.toUpperCase())) payees().push({ name, kind: dir, env: e || '', match: '' });
+        state.month = (date.value || today()).slice(0, 7);
+        checkAlerts(); save(); render(); done();
+      });
+      fillNames();
+      panel.append(
+        el('div', { class: 'btn-row' }, outBtn, inBtn), names,
+        el('label', { class: 'field' }, whoLabel, who),
+        el('div', { class: 'two' }, field('Amount $', amount), field('Date', date)),
+        field('Account', acct), field('Envelope', env),
+        el('label', { class: 'check' }, remember, ' Remember this name for next time'),
+        msg, save1);
+    });
+  }
+  $('#fab').addEventListener('click', addTransactionSheet);
+
+  $('#new-env-btn').addEventListener('click', () => sheet('New envelope', (panel, done) => {
+    const name = el('input', { type: 'text', placeholder: 'e.g. Music supplies' });
+    const group = el('select', {}); ['Needs', 'Wants', 'Bills', 'Debt', 'Saving', 'Your call'].forEach((g) => group.append(new Option(g, g)));
+    const plan = el('input', { type: 'number', inputmode: 'decimal', min: '0', step: '1', placeholder: '0' });
+    const msg = el('p', { class: 'small bad' });
+    const go = el('button', { type: 'button', class: 'btn primary', text: 'Add envelope' });
+    go.addEventListener('click', () => {
+      if (lines().includes(name.value.trim())) { msg.textContent = 'You already have an envelope with that name.'; return; }
+      if (!addEnvelope(name.value, group.value, plan.value)) { msg.textContent = 'Give it a name.'; return; }
+      save(); render(); done();
+    });
+    panel.append(field('Name', name), field('Type', group), field('Plan per month $', plan),
+      el('p', { class: 'muted small', text: 'You can change the amount any time on the Budget tab.' }), msg, go);
+  }));
+
+  // Settings: the list of payees and payors
+  let payeeEnv = null;
+  function renderPayees() {
+    if (!payeeEnv) { payeeEnv = envPicker(HOME, true); $('#payee-env-slot').replaceChildren(payeeEnv); }
+    const list = $('#payee-list');
+    if (!payees().length) { list.replaceChildren(el('p', { class: 'muted small', text: 'None yet. Add one below, or tick "Remember this name" when you add a transaction.' })); return; }
+    list.replaceChildren(...payees().slice().sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
+      const pick = envOptions(p.env || HOME);
+      pick.addEventListener('change', () => { p.env = pick.value; save(); });
+      const match = el('input', { type: 'text', placeholder: 'Shows on statement as', 'aria-label': `Statement name for ${p.name}` });
+      match.value = p.match || '';
+      match.addEventListener('change', () => { p.match = match.value.trim(); save(); });
+      const del = el('button', { type: 'button', class: 'icon-btn', 'aria-label': `Remove ${p.name}`, text: '✕' });
+      del.addEventListener('click', () => { if (window.confirm(`Remove ${p.name} from the list? Transactions stay where they are.`)) { state.payees = payees().filter((o) => o !== p); save(); renderPayees(); } });
+      return el('div', { class: 'payee' },
+        el('div', { class: 'payee-top' }, el('b', { text: p.name }), el('span', { class: 'muted small', text: p.kind === 'in' ? 'pays me' : 'I pay' }), del),
+        pick, match);
+    }));
+  }
+  $('#payee-kind').addEventListener('change', (e) => payeeEnv && payeeEnv.set(e.target.value === 'in' ? INCOME : HOME));
+  $('#payee-add').addEventListener('click', () => {
+    const name = $('#payee-name').value.trim();
+    if (!name || payees().some((p) => p.name.toUpperCase() === name.toUpperCase())) return;
+    const e = payeeEnv.value();
+    if (e === null) return;
+    payees().push({ name, kind: $('#payee-kind').value, env: e || '', match: $('#payee-match').value.trim() });
+    $('#payee-name').value = ''; $('#payee-match').value = ''; payeeEnv = null;
+    save(); renderPayees();
+  });
+
+  // After a statement comes in, point out bank lines that look like ones typed by hand
+  function showPossibleDoubles(box, fresh) {
+    const days = (a, b) => Math.abs(new Date(a) - new Date(b)) / 864e5;
+    const pairs = [];
+    const used = new Set();
+    for (const b of fresh) {
+      const h = state.tx.find((t) => t.byHand && !t.checked && !used.has(t) && Math.abs(t.v - b.v) < 0.005 && days(t.d, b.d) <= 7);
+      if (h) { used.add(h); pairs.push([h, b]); }
+    }
+    if (!pairs.length) return;
+    box.append(el('h3', { text: 'Possible doubles' }),
+      el('p', { class: 'muted small', text: 'These bank lines match ones you added by hand. If they are the same thing, remove the hand one so it isn\'t counted twice.' }));
+    pairs.forEach(([h, b]) => {
+      const rm = el('button', { type: 'button', class: 'btn', text: 'Same thing: remove mine' });
+      const keep = el('button', { type: 'button', class: 'btn', text: 'Different: keep both' });
+      const row = el('div', { class: 'card' }, el('p', { text: `You added: ${h.s} ${money2(h.v)} on ${h.d}` }), el('p', { class: 'muted', text: `Bank says: ${b.s} ${money2(b.v)} on ${b.d}` }), el('div', { class: 'btn-row' }, rm, keep));
+      rm.addEventListener('click', () => {
+        // Trust the envelope you picked by hand, and remember it for this store
+        if (h.env && h.env !== HOME) { b.env = h.env; b.manual = true; state.learned[merchantKey(b.s)] = h.env; }
+        state.tx = state.tx.filter((t) => t !== h); save(); render(); row.replaceChildren(el('p', { class: 'good', text: 'Removed. Counted once now.' }));
+      });
+      keep.addEventListener('click', () => { h.checked = true; save(); row.replaceChildren(el('p', { class: 'good', text: 'Kept both.' })); });
+      box.append(row);
+    });
   }
 
   // ---------- alerts ----------
@@ -623,7 +810,7 @@
     if (state.tab === 'envelopes') renderEnvelopes();
     if (state.tab === 'budget') renderBudget();
     if (state.tab === 'trends') renderTrends();
-    if (state.tab === 'settings') renderSettings();
+    if (state.tab === 'settings') { renderSettings(); renderPayees(); }
     if (state.tab === 'transactions') { if (!state.month) state.month = months().slice(-1)[0]; renderTx(); }
   }
   let resizeTimer;
